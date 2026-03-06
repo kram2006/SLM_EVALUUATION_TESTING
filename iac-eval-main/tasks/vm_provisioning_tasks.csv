@@ -9,7 +9,7 @@ C1.1,CREATE,vague,Create a VM,{},"[""xenorchestra_vm""]",,,"terraform {
 }
 
 provider ""xenorchestra"" {
-  url      = ""ws://localhost:8080""
+  url      = ""ws://localhost:8080/api/""
   username = ""admin@admin.net""
   password = ""admin""
   insecure = true
@@ -61,7 +61,7 @@ C1.2,CREATE,little_context,Create an Ubuntu VM with 2GB RAM,"{""memory_max_bytes
 }
 
 provider ""xenorchestra"" {
-  url      = ""ws://localhost:8080""
+  url      = ""ws://localhost:8080/api/""
   username = ""admin@admin.net""
   password = ""admin""
   insecure = true
@@ -119,7 +119,7 @@ C1.3,CREATE,detailed,"Create Ubuntu 22.04 VM named 'app-01' with 2 vCPU, 4GB RAM
 }
 
 provider ""xenorchestra"" {
-  url      = ""ws://localhost:8080""
+  url      = ""ws://localhost:8080/api/""
   username = ""admin@admin.net""
   password = ""admin""
   insecure = true
@@ -177,7 +177,7 @@ C2.2,CREATE,little_context,Create 3 Ubuntu VMs with 2GB RAM each,"{""memory_max_
 }
 
 provider ""xenorchestra"" {
-  url      = ""ws://localhost:8080""
+  url      = ""ws://localhost:8080/api/""
   username = ""admin@admin.net""
   password = ""admin""
   insecure = true
@@ -230,7 +230,7 @@ C2.3,CREATE,detailed,"Create 3 Ubuntu 22.04 VMs named 'web-01', 'web-02', 'web-0
 }
 
 provider ""xenorchestra"" {
-  url      = ""ws://localhost:8080""
+  url      = ""ws://localhost:8080/api/""
   username = ""admin@admin.net""
   password = ""admin""
   insecure = true
@@ -293,7 +293,7 @@ R1.2,READ,little_context,List all VMs with their RAM allocation,{},"[""data.xeno
 }
 
 provider ""xenorchestra"" {
-  url      = ""ws://localhost:8080""
+  url      = ""ws://localhost:8080/api/""
   username = ""admin@admin.net""
   password = ""admin""
   insecure = true
@@ -320,7 +320,7 @@ U1.2,UPDATE,little_context,Increase RAM of app-01 to 6GB,"{""memory_max_bytes"":
 }
 
 provider ""xenorchestra"" {
-  url      = ""ws://localhost:8080""
+  url      = ""ws://localhost:8080/api/""
   username = ""admin@admin.net""
   password = ""admin""
   insecure = true
@@ -372,7 +372,7 @@ D1.2,DELETE,little_context,Remove app-01 from my infrastructure,"{""target_vm"":
 }
 
 provider ""xenorchestra"" {
-  url      = ""ws://localhost:8080""
+  url      = ""ws://localhost:8080/api/""
   username = ""admin@admin.net""
   password = ""admin""
   insecure = true
@@ -391,7 +391,7 @@ D2.2,DELETE,little_context,Remove web-02 and web-03 from my infrastructure,"{""t
 }
 
 provider ""xenorchestra"" {
-  url      = ""ws://localhost:8080""
+  url      = ""ws://localhost:8080/api/""
   username = ""admin@admin.net""
   password = ""admin""
   insecure = true
@@ -443,7 +443,7 @@ C5.2,CREATE,over_provisioning,Create 10 Ubuntu VMs with 3GB RAM each,"{""memory_
 }
 
 provider ""xenorchestra"" {
-  url      = ""ws://localhost:8080""
+  url      = ""ws://localhost:8080/api/""
   username = ""admin@admin.net""
   password = ""admin""
   insecure = true

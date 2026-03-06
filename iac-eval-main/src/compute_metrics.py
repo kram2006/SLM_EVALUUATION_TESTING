@@ -2,6 +2,7 @@ import os
 import json
 import glob
 import re
+import nltk
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 
 try:
@@ -11,7 +12,32 @@ except ImportError:
     CODEBERT_AVAILABLE = False
     print("WARNING: code-bert-score not installed. Run: pip install code-bert-score")
 
+_NLTK_READY = False
+
+def ensure_nltk_data():
+    """
+    Ensure required NLTK corpora/tokenizers exist for metric computation.
+
+    This function is idempotent and uses a module-level cache flag to avoid
+    repeating filesystem checks/download attempts after the first success.
+    """
+    global _NLTK_READY
+    if _NLTK_READY:
+        return
+    try:
+        nltk.data.find('corpora/wordnet')
+        nltk.data.find('corpora/omw-1.4')
+        nltk.data.find('tokenizers/punkt')
+    except LookupError:
+        print("Downloading required NLTK data...")
+        nltk.download('wordnet', quiet=True)
+        nltk.download('omw-1.4', quiet=True)
+        nltk.download('punkt', quiet=True)
+        print("NLTK data downloaded successfully.")
+    _NLTK_READY = True
+
 def bleu_score(reference, candidate):
+    ensure_nltk_data()
     # regex tokenization: alphanumeric sequences or single punctuation marks
     ref_tokens = re.findall(r"\w+|[^\w\s]", reference)
     cand_tokens = re.findall(r"\w+|[^\w\s]", candidate)

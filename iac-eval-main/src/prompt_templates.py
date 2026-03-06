@@ -30,7 +30,7 @@ def _boilerplate():
 }
 
 provider "xenorchestra" {
-  url      = "ws://localhost:8080/api"
+  url      = "ws://localhost:8080/api/"
   username = "admin@admin.net"
   password = "admin"
   insecure = true
@@ -255,7 +255,7 @@ Requirements for the corrected program:
 - Memory values must be in bytes as integer literals.
 
 When writing the Terraform code, you must use the following Xen Orchestra environment details:
-- Provider: url="ws://localhost:8080", username="admin@admin.net", password="admin", insecure=true.
+- Provider: url="ws://localhost:8080/api/", username="admin@admin.net", password="admin", insecure=true.
 - Data sources: Use name_label "DAO-Agentic-Infra" for the pool, "Pool-wide network associated with eth0" for the network, "Local storage" for the storage repository (sr), and "Ubuntu-22" for the OS template.
 - All VMs must use the IDs resolved from these data sources.
 """.format(question_prompt, candidate_config, error_message)
