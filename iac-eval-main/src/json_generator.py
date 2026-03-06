@@ -10,6 +10,17 @@ import ast
 import operator as _op
 
 RAM_MARGIN_PERCENT = 0.05
+SENSITIVE_FIELD_PATTERN = re.compile(
+    r'(?i)\b(username|password|api[_-]?key|token)\b\s*([:=])\s*(".*?"|\'.*?\'|[^\s,\n}]+)'
+)
+
+def redact_sensitive_text(value):
+    if not isinstance(value, str):
+        return value
+    return SENSITIVE_FIELD_PATTERN.sub(
+        lambda m: f'{m.group(1)}{m.group(2)}"[REDACTED]"',
+        value
+    )
 
 def _safe_eval_arith(expr):
     """Safely evaluate simple arithmetic like '4 * 1024 * 1024 * 1024'."""
@@ -178,7 +189,7 @@ def generate_dataset_entry(task_data, terraform_code, execution_results, verific
             "available_ram_gb_before": round(config.get('xenorchestra', {}).get('usable_ram_gb', 20) - sum(vm.get('ram_gb', 0) for vm in pre_verification_data.get('vm_details', [])), 2),
             "available_ram_gb_after": round(config.get('xenorchestra', {}).get('usable_ram_gb', 20) - sum(vm.get('ram_gb', 0) for vm in verification_data.get('vm_details', [])), 2),
             "edge_case": "over_provisioning" if reqs.get('expected_error') == 'resource_exhaustion' else "none",
-            "system_prompt": model_config.get('system_prompt', config.get('system_prompt', ''))
+            "system_prompt": redact_sensitive_text(model_config.get('system_prompt', config.get('system_prompt', '')))
         },
         
         "prompt": {
@@ -189,7 +200,7 @@ def generate_dataset_entry(task_data, terraform_code, execution_results, verific
         
         "llm_response": {
             "generated_code": terraform_code,
-            "full_response_text": execution_results.get('raw_llm_response', ''),
+            "full_response_text": redact_sensitive_text(execution_results.get('raw_llm_response', '')),
             "questions_asked": [],
             "additional_files_generated": [],
             "iterations_needed": iterations,

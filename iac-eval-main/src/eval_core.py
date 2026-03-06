@@ -5,6 +5,7 @@ import json
 import logging
 import re
 import asyncio
+import copy
 from datetime import datetime
 
 from eval_utils import (
@@ -22,6 +23,25 @@ VALID_TASK_CATEGORIES = {"CREATE", "READ", "UPDATE", "DELETE"}
 # Keep only a bounded tail of retry errors to prevent unbounded in-memory context growth.
 MAX_ERROR_HISTORY = 5
 RESOURCE_EXHAUSTION_MARKERS = ('insufficient memory', 'out of memory', 'not enough memory')
+SENSITIVE_FIELD_PATTERN = re.compile(
+    r'(?i)\b(username|password|api[_-]?key|token)\b\s*([:=])\s*(".*?"|\'.*?\'|[^\s,\n}]+)'
+)
+
+def redact_sensitive_text(value):
+    if not isinstance(value, str):
+        return value
+    return SENSITIVE_FIELD_PATTERN.sub(
+        lambda m: f'{m.group(1)}{m.group(2)}"[REDACTED]"',
+        value
+    )
+
+def redact_messages_for_logging(messages):
+    redacted = copy.deepcopy(messages)
+    for message in redacted:
+        content = message.get("content")
+        if isinstance(content, str):
+            message["content"] = redact_sensitive_text(content)
+    return redacted
 
 async def evaluate_task(task, config, client, output_dir, workspace_override=None, initial_history=None, plan_only=False, sample_num=0, chain_index=0, no_confirm=False, enhance_strat=""):
     """
@@ -263,12 +283,13 @@ provider "xenorchestra" {{
         with open(os.path.join(workspace_dir, "main.tf"), "w") as f:
             f.write(terraform_code)
         
-        save_log(os.path.join(task_log_dir, f"llm_response_iter{iteration}.txt"), response_content)
+        redacted_response_content = redact_sensitive_text(response_content)
+        save_log(os.path.join(task_log_dir, f"llm_response_iter{iteration}.txt"), redacted_response_content)
         save_log(os.path.join(task_log_dir, f"main_iter{iteration}.tf"), terraform_code)
         
         # Save iteration-specific history
         with open(os.path.join(task_log_dir, f"conversation_history_iter{iteration}.json"), "w", encoding='utf-8') as f:
-            json.dump(messages, f, indent=2)
+            json.dump(redact_messages_for_logging(messages), f, indent=2)
 
         log_step("Running terraform init")
         init_res = await execute_command("terraform init", cwd=workspace_dir, env=tf_env)
@@ -352,7 +373,7 @@ provider "xenorchestra" {{
         'terraform_init': init_res, 'terraform_validate': val_res, 'terraform_plan': plan_res, 'terraform_apply': apply_res,
         'spec_accuracy': spec_res, 'post_state_verification': post_state_result, 'iterations': iteration,
         'generation_time': generation_time, 'sample_num': sample_num, 'expected_failure_matched': success and expected_error == 'resource_exhaustion',
-        'raw_llm_response': response_content, 'enhance_strat': enhance_strat
+        'raw_llm_response': redact_sensitive_text(response_content), 'enhance_strat': enhance_strat
     }
 
     entry = generate_dataset_entry(
