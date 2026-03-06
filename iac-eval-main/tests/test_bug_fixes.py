@@ -11,10 +11,12 @@ if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
 from eval_utils import extract_terraform_code
+from eval_utils import redact_sensitive_text as redact_eval_sensitive_text, redact_messages_for_logging
 from spec_checker import DeleteValidation
 from compute_metrics import compute_metrics_for_folder, calculate_pass_at_k
 from evaluate import _validate_local_path, load_config
 from spec_checker import get_plan_json
+from json_generator import redact_sensitive_text as redact_json_sensitive_text
 
 
 def test_extract_terraform_code_keeps_non_empty_when_language_line_has_no_newline():
@@ -100,3 +102,34 @@ def test_load_config_raises_for_invalid_config():
             load_config(temp_path)
     finally:
         os.remove(temp_path)
+
+
+def test_redact_sensitive_text_masks_credentials_and_tokens():
+    # Intentionally mixes "=" and ":" assignment styles because logs include both Python/HCL/YAML patterns.
+    raw = 'provider "xenorchestra" { username = "admin@admin.net" password = "supersecret" api_key: sk-abc token=xyz }'
+    redacted = redact_eval_sensitive_text(raw)
+    assert 'admin@admin.net' not in redacted
+    assert 'supersecret' not in redacted
+    assert 'sk-abc' not in redacted
+    assert 'xyz' not in redacted
+    assert 'token="[REDACTED]"' in redacted
+    assert redacted.count('[REDACTED]') == 4
+
+
+def test_redact_messages_for_logging_masks_message_content():
+    messages = [
+        {"role": "system", "content": 'username="admin" password="pw"'},
+        {"role": "user", "content": "Generate terraform"},
+    ]
+    redacted = redact_messages_for_logging(messages)
+    assert messages[0]["content"] != redacted[0]["content"]
+    assert "admin" in messages[0]["content"]
+    assert "admin" not in redacted[0]["content"]
+    assert "Generate terraform" == redacted[1]["content"]
+
+
+def test_json_generator_redacts_system_prompt_text():
+    raw = 'Provider username: admin@admin.net password: admin'
+    redacted = redact_json_sensitive_text(raw)
+    assert 'admin@admin.net' not in redacted
+    assert 'password: admin' not in redacted

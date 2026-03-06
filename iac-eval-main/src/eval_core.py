@@ -3,12 +3,11 @@ import sys
 import time
 import json
 import logging
-import re
 import asyncio
 from datetime import datetime
 
 from eval_utils import (
-    execute_command, save_log, execute_terraform_apply, 
+    execute_command, save_log, execute_terraform_apply, redact_sensitive_text, redact_messages_for_logging,
     capture_screenshot, GREEN, RED, CYAN, YELLOW, MAGENTA, RESET, BOLD
 )
 from logger import log_step, log_error
@@ -263,12 +262,13 @@ provider "xenorchestra" {{
         with open(os.path.join(workspace_dir, "main.tf"), "w") as f:
             f.write(terraform_code)
         
-        save_log(os.path.join(task_log_dir, f"llm_response_iter{iteration}.txt"), response_content)
+        redacted_response_content = redact_sensitive_text(response_content)
+        save_log(os.path.join(task_log_dir, f"llm_response_iter{iteration}.txt"), redacted_response_content)
         save_log(os.path.join(task_log_dir, f"main_iter{iteration}.tf"), terraform_code)
         
         # Save iteration-specific history
         with open(os.path.join(task_log_dir, f"conversation_history_iter{iteration}.json"), "w", encoding='utf-8') as f:
-            json.dump(messages, f, indent=2)
+            json.dump(redact_messages_for_logging(messages), f, indent=2)
 
         log_step("Running terraform init")
         init_res = await execute_command("terraform init", cwd=workspace_dir, env=tf_env)
@@ -352,7 +352,7 @@ provider "xenorchestra" {{
         'terraform_init': init_res, 'terraform_validate': val_res, 'terraform_plan': plan_res, 'terraform_apply': apply_res,
         'spec_accuracy': spec_res, 'post_state_verification': post_state_result, 'iterations': iteration,
         'generation_time': generation_time, 'sample_num': sample_num, 'expected_failure_matched': success and expected_error == 'resource_exhaustion',
-        'raw_llm_response': response_content, 'enhance_strat': enhance_strat
+        'raw_llm_response': redact_sensitive_text(response_content), 'enhance_strat': enhance_strat
     }
 
     entry = generate_dataset_entry(
