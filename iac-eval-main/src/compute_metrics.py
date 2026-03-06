@@ -50,6 +50,30 @@ def codebert_score(reference, candidate):
         print(f"  CodeBERT warning: {e}")
         return None
 
+def calculate_pass_at_k(n, c, k):
+    """
+    Unbiased pass@k estimator from "Evaluating Large Language Models Trained on Code" (Chen et al., 2021)
+    
+    Args:
+        n: total number of samples
+        c: number of correct samples
+        k: k in pass@k
+    
+    Returns:
+        Unbiased estimate of pass@k
+    
+    Formula: pass@k ≈ 1 - comb(n-c, k) / comb(n, k)
+    """
+    if n < k:
+        return 0.0
+    if c == n:
+        return 1.0
+    if c == 0:
+        return 0.0
+    
+    from math import comb
+    return 1.0 - comb(n - c, k) / comb(n, k)
+
 def compute_metrics_for_folder(dataset_folder, task_csv_path):
     import pandas as pd
     df = pd.read_csv(task_csv_path)
@@ -109,22 +133,6 @@ def compute_metrics_for_folder(dataset_folder, task_csv_path):
     # Calculate unbiased Pass@k using Chen et al. (2021) formula
     # pass@k ≈ 1 - Product(1 - k/n, n-c+1, n) where c = # correct samples, n = total samples
     # Simplified: pass@k = 1 - comb(n-c, k) / comb(n, k)
-    def calculate_pass_at_k(n, c, k):
-        """
-        Unbiased pass@k estimator from "Evaluating Large Language Models Trained on Code" (Chen et al., 2021)
-        n: total samples
-        c: number of correct samples
-        k: k in pass@k
-        """
-        if n < k:
-            return 0.0
-        if c == n:
-            return 1.0
-        if c == 0:
-            return 0.0
-        
-        from math import comb
-        return 1.0 - comb(n - c, k) / comb(n, k)
     
     total_unique_tasks = len(task_groups)
     
