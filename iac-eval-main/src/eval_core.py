@@ -18,7 +18,12 @@ from spec_checker import check_spec_accuracy, get_plan_json, verify_post_state
 from prompt_templates import CoT_prompt, FSP_prompt, multi_turn_plan_error_prompt
 
 def extract_compact_state(tfstate_content):
-    """Extract a compact resource summary from terraform state JSON."""
+    """
+    Extract a compact resource summary from terraform state JSON.
+
+    Returns a JSON string of resource objects with `type`, `name`, and `id`.
+    If parsing fails, returns a JSON object containing an `error` key.
+    """
     try:
         state = json.loads(tfstate_content)
         resources = []
@@ -31,8 +36,9 @@ def extract_compact_state(tfstate_content):
                 'id': attrs.get('id')
             })
         return json.dumps(resources, indent=2)
-    except Exception:
-        return "{}"
+    except Exception as e:
+        log_error(f"Failed to parse terraform.tfstate for compact context: {e}")
+        return json.dumps({"error": "terraform_state_parse_failed"})
 
 async def evaluate_task(task, config, client, output_dir, workspace_override=None, initial_history=None, plan_only=False, sample_num=0, chain_index=0, no_confirm=False, enhance_strat=""):
     """
