@@ -26,6 +26,9 @@ from eval_utils import (
 from eval_core import evaluate_task
 from models import GlobalConfig, ModelConfig
 
+MAX_CHAIN_SLUG_LENGTH = 50
+CHAIN_HASH_LENGTH = 16
+
 def _validate_local_path(path_value, arg_name):
     normalized = os.path.normpath(path_value)
     path_parts = normalized.split(os.sep)
@@ -183,8 +186,8 @@ async def main():
             # Chained mode: Shared workspace for all tasks in this sample
             chain_ids = [t['task_id'].replace('.', '_') for t in tasks]
             chain_slug = "_".join(chain_ids)
-            if len(chain_slug) > 50:
-                chain_slug = hashlib.md5(chain_slug.encode("utf-8")).hexdigest()[:16]
+            if len(chain_slug) > MAX_CHAIN_SLUG_LENGTH:
+                chain_slug = hashlib.sha256(chain_slug.encode("utf-8")).hexdigest()[:CHAIN_HASH_LENGTH]
             workspace_dir = os.path.join(args.output_dir, "terraform_code", model_config['folder_name'], f"chain_{chain_slug}_p{pass_num}")
             os.makedirs(workspace_dir, exist_ok=True)
             

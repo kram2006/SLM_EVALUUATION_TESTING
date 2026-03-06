@@ -9,6 +9,8 @@ from datetime import datetime
 import ast
 import operator as _op
 
+RAM_MARGIN_PERCENT = 0.05
+
 def _safe_eval_arith(expr):
     """Safely evaluate simple arithmetic like '4 * 1024 * 1024 * 1024'."""
     _ops = {ast.Mult: _op.mul, ast.Add: _op.add, ast.Sub: _op.sub}
@@ -25,7 +27,7 @@ def _safe_eval_arith(expr):
 
 def extract_hcl_total_value(key, code):
     """Sum all occurrences of key = value in HCL, supporting arithmetic expressions."""
-    pattern = fr"(?m)^\s*{re.escape(key)}\s*=\s*([\d][\d\s\*\+\-]*)\s*$"
+    pattern = fr"(?m)^\s*{re.escape(key)}\s*=\s*(\d(?:[\d\s]*[+\-*]\s*\d+)*)\s*$"
     matches = re.findall(pattern, code)
     results = []
     for v in matches:
@@ -59,7 +61,7 @@ def _check_vm_ram(actual_memory, verification_data, terraform_code):
     for vm in verification_data['vm_details']:
         vm_ram = int(round((vm.get('ram_gb', 0) or 0) * 1024**3))
         # Allow 5% margin for overhead
-        if abs(vm_ram - target) > int(0.05 * target):
+        if abs(vm_ram - target) > int(RAM_MARGIN_PERCENT * target):
             return False
     return True
 

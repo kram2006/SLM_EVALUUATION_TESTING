@@ -17,8 +17,11 @@ from xo_client import XenOrchestraClient
 from spec_checker import check_spec_accuracy, get_plan_json, verify_post_state
 from prompt_templates import CoT_prompt, FSP_prompt, multi_turn_plan_error_prompt
 
+# Allowed task categories expected by strategy validators and chain post-state checks.
 VALID_TASK_CATEGORIES = {"CREATE", "READ", "UPDATE", "DELETE"}
+# Keep only a bounded tail of retry errors to prevent unbounded in-memory context growth.
 MAX_ERROR_HISTORY = 5
+RESOURCE_EXHAUSTION_MARKERS = ('insufficient memory', 'out of memory', 'not enough memory')
 
 async def evaluate_task(task, config, client, output_dir, workspace_override=None, initial_history=None, plan_only=False, sample_num=0, chain_index=0, no_confirm=False, enhance_strat=""):
     """
@@ -269,33 +272,32 @@ provider "xenorchestra" {{
 
         log_step("Running terraform init")
         init_res = await execute_command("terraform init", cwd=workspace_dir, env=tf_env)
-        save_log(os.path.join(task_log_dir, f"init_iter{iteration}.log"), init_res['stdout'] + init_res['stderr'])
+        save_log(os.path.join(task_log_dir, f"init_iter{iteration}.log"), init_res.get('stdout', '') + init_res.get('stderr', ''))
         if init_res['exit_code'] != 0:
-            error_history.append(f"Init failed:\n{init_res['stderr']}")
+            error_history.append(f"Init failed:\n{init_res.get('stderr', '')}")
             error_history = error_history[-MAX_ERROR_HISTORY:]
             continue
 
         log_step("Running terraform validate")
         val_res = await execute_command("terraform validate", cwd=workspace_dir, env=tf_env)
-        save_log(os.path.join(task_log_dir, f"validate_iter{iteration}.log"), val_res['stdout'] + val_res['stderr'])
+        save_log(os.path.join(task_log_dir, f"validate_iter{iteration}.log"), val_res.get('stdout', '') + val_res.get('stderr', ''))
         if val_res['exit_code'] != 0:
-            error_history.append(f"Validation failed:\n{val_res['stderr']}")
+            error_history.append(f"Validation failed:\n{val_res.get('stderr', '')}")
             error_history = error_history[-MAX_ERROR_HISTORY:]
             continue
 
         log_step("Running terraform plan")
         plan_res = await execute_command("terraform plan -out=tfplan", cwd=workspace_dir, env=tf_env)
-        save_log(os.path.join(task_log_dir, f"plan_iter{iteration}.log"), plan_res['stdout'] + plan_res['stderr'])
+        save_log(os.path.join(task_log_dir, f"plan_iter{iteration}.log"), plan_res.get('stdout', '') + plan_res.get('stderr', ''))
         
         if expected_error == 'resource_exhaustion':
              stderr_lower = plan_res.get('stderr', '').lower()
-             exhaustion_markers = ('insufficient memory', 'out of memory', 'not enough memory', 'resource_exhaustion')
-             if plan_res['exit_code'] != 0 and any(marker in stderr_lower for marker in exhaustion_markers):
+             if plan_res['exit_code'] != 0 and any(marker in stderr_lower for marker in RESOURCE_EXHAUSTION_MARKERS):
                  success = True
                  execution_results = {'outcome': 'success', 'details': 'Expected failure verified'}
                  break
         if plan_res['exit_code'] != 0:
-            error_history.append(f"Plan failed:\n{plan_res['stderr']}")
+            error_history.append(f"Plan failed:\n{plan_res.get('stderr', '')}")
             error_history = error_history[-MAX_ERROR_HISTORY:]
             continue
 
@@ -326,9 +328,9 @@ provider "xenorchestra" {{
 
         log_step("Running terraform apply")
         apply_res = await execute_terraform_apply(workspace_dir, env=tf_env)
-        save_log(os.path.join(task_log_dir, f"apply_iter{iteration}.log"), apply_res['stdout'] + apply_res['stderr'])
+        save_log(os.path.join(task_log_dir, f"apply_iter{iteration}.log"), apply_res.get('stdout', '') + apply_res.get('stderr', ''))
         if apply_res['exit_code'] != 0:
-            error_history.append(f"Apply failed:\n{apply_res['stderr']}")
+            error_history.append(f"Apply failed:\n{apply_res.get('stderr', '')}")
             error_history = error_history[-MAX_ERROR_HISTORY:]
             continue
             
