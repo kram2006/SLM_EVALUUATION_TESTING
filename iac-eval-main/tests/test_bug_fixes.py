@@ -11,11 +11,11 @@ if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
 from eval_utils import extract_terraform_code
+from eval_utils import redact_sensitive_text as redact_eval_text, redact_messages_for_logging
 from spec_checker import DeleteValidation
 from compute_metrics import compute_metrics_for_folder, calculate_pass_at_k
 from evaluate import _validate_local_path, load_config
 from spec_checker import get_plan_json
-from eval_core import redact_sensitive_text as redact_eval_text, redact_messages_for_logging
 from json_generator import redact_sensitive_text as redact_json_text
 
 
@@ -105,6 +105,7 @@ def test_load_config_raises_for_invalid_config():
 
 
 def test_redact_sensitive_text_masks_credentials_and_tokens():
+    # Intentionally mixes "=" and ":" assignment styles because logs include both Python/HCL/YAML patterns.
     raw = 'provider "xenorchestra" { username = "admin@admin.net" password = "supersecret" api_key: sk-abc token=xyz }'
     redacted = redact_eval_text(raw)
     assert 'admin@admin.net' not in redacted

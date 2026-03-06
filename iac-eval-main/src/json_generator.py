@@ -3,6 +3,7 @@ import uuid
 import os
 import re
 from datetime import datetime
+from eval_utils import redact_sensitive_text
 
 # --- REFACTORED MODULE-LEVEL HELPERS ---
 
@@ -10,17 +11,6 @@ import ast
 import operator as _op
 
 RAM_MARGIN_PERCENT = 0.05
-SENSITIVE_FIELD_PATTERN = re.compile(
-    r'(?i)\b(username|password|api[_-]?key|token)\b\s*([:=])\s*(".*?"|\'.*?\'|[^\s,\n}]+)'
-)
-
-def redact_sensitive_text(value):
-    if not isinstance(value, str):
-        return value
-    return SENSITIVE_FIELD_PATTERN.sub(
-        lambda m: f'{m.group(1)}{m.group(2)}"[REDACTED]"',
-        value
-    )
 
 def _safe_eval_arith(expr):
     """Safely evaluate simple arithmetic like '4 * 1024 * 1024 * 1024'."""

@@ -3,13 +3,11 @@ import sys
 import time
 import json
 import logging
-import re
 import asyncio
-import copy
 from datetime import datetime
 
 from eval_utils import (
-    execute_command, save_log, execute_terraform_apply, 
+    execute_command, save_log, execute_terraform_apply, redact_sensitive_text, redact_messages_for_logging,
     capture_screenshot, GREEN, RED, CYAN, YELLOW, MAGENTA, RESET, BOLD
 )
 from logger import log_step, log_error
@@ -23,25 +21,6 @@ VALID_TASK_CATEGORIES = {"CREATE", "READ", "UPDATE", "DELETE"}
 # Keep only a bounded tail of retry errors to prevent unbounded in-memory context growth.
 MAX_ERROR_HISTORY = 5
 RESOURCE_EXHAUSTION_MARKERS = ('insufficient memory', 'out of memory', 'not enough memory')
-SENSITIVE_FIELD_PATTERN = re.compile(
-    r'(?i)\b(username|password|api[_-]?key|token)\b\s*([:=])\s*(".*?"|\'.*?\'|[^\s,\n}]+)'
-)
-
-def redact_sensitive_text(value):
-    if not isinstance(value, str):
-        return value
-    return SENSITIVE_FIELD_PATTERN.sub(
-        lambda m: f'{m.group(1)}{m.group(2)}"[REDACTED]"',
-        value
-    )
-
-def redact_messages_for_logging(messages):
-    redacted = copy.deepcopy(messages)
-    for message in redacted:
-        content = message.get("content")
-        if isinstance(content, str):
-            message["content"] = redact_sensitive_text(content)
-    return redacted
 
 async def evaluate_task(task, config, client, output_dir, workspace_override=None, initial_history=None, plan_only=False, sample_num=0, chain_index=0, no_confirm=False, enhance_strat=""):
     """

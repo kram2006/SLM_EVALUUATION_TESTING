@@ -5,6 +5,8 @@ import subprocess
 import logging
 import requests
 import asyncio
+import re
+import copy
 from logger import log_step, log_error
 
 # ANSI Colors for terminal
@@ -15,6 +17,25 @@ YELLOW = "\033[93m"
 MAGENTA = "\033[95m"
 RESET = "\033[0m"
 BOLD = "\033[1m"
+SENSITIVE_FIELD_PATTERN = re.compile(
+    r'(?i)\b(username|password|api[_-]?key|token)\b\s*([:=])\s*(".*?"|\'.*?\'|[^\s,\n}]+)'
+)
+
+def redact_sensitive_text(value):
+    if not isinstance(value, str):
+        return value
+    return SENSITIVE_FIELD_PATTERN.sub(
+        lambda m: f'{m.group(1)}{m.group(2)}"[REDACTED]"',
+        value
+    )
+
+def redact_messages_for_logging(messages):
+    redacted = copy.deepcopy(messages)
+    for message in redacted:
+        content = message.get("content")
+        if isinstance(content, str):
+            message["content"] = redact_sensitive_text(content)
+    return redacted
 
 async def execute_command(command, cwd=None, timeout=None, print_output=True, env=None):
     """Run a shell command asynchronously and return output"""
