@@ -27,8 +27,9 @@ class ModelConfig(BaseModel):
     local: bool = False
 
 class GlobalConfig(BaseModel):
-    active_model_name: str
+    active_model_name: Optional[str] = None
     baseline_system_prompt: Optional[str] = None
+    multi_turn_system_prompt: Optional[str] = None
     xenorchestra: XenOrchestraConfig = Field(default_factory=XenOrchestraConfig)
     openrouter: Dict[str, Any] = Field(default_factory=dict)
     models: Dict[str, ModelConfig]

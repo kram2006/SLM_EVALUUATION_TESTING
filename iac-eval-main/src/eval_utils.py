@@ -78,20 +78,29 @@ def save_log(path, content):
     except Exception as e:
         logging.error(f"Failed to save log to {path}: {e}")
 
-def execute_terraform_apply(workspace_dir, env=None):
+async def execute_terraform_apply(workspace_dir, env=None):
     """Execute terraform apply with auto-approve"""
     # Use -no-color to keep logs clean
     cmd = "terraform apply -auto-approve -no-color"
-    return execute_command(cmd, cwd=workspace_dir, timeout=600, env=env)
+    return await execute_command(cmd, cwd=workspace_dir, timeout=600, env=env)
 
 def unload_ollama_model(model_config):
     """Unload Ollama model from VRAM by setting keep_alive to 0"""
-    if not model_config or 'ollama' not in model_config.get('name', '').lower():
+    if not model_config:
+        return
+    
+    # Check both the name field and base_url for Ollama indicators
+    name = model_config.get('name', '').lower()
+    base_url = model_config.get('base_url', '')
+    
+    is_ollama = 'ollama' in name or 'localhost:11434' in base_url
+    if not is_ollama:
         return
         
     try:
-        base_url = model_config.get('base_url', 'http://localhost:11434/v1')
-        ollama_url = base_url.replace('/v1', '/api/generate')
+        if 'localhost:11434' not in base_url:
+            base_url = 'http://localhost:11434/v1'
+        ollama_url = base_url.replace('/v1', '/api/generate').replace('/v1/chat/completions', '/api/generate')
         
         payload = {
             "model": model_config['name'],
@@ -110,3 +119,32 @@ def capture_screenshot(task_id, model_name, screenshot_type, screenshot_dir):
     filepath = os.path.join(screenshot_dir, filename)
     # real capture logic would go here
     return filepath
+
+def extract_terraform_code(response_text):
+    """
+    Extract Terraform/HCL code from LLM response text.
+    Looks for code blocks delimited by triple backticks or returns the full response if no delimiters found.
+    """
+    if not response_text:
+        return ""
+    
+    delimiters = ["```"]
+    
+    for delim in delimiters:
+        if delim in response_text:
+            parts = response_text.split(delim)
+            if len(parts) >= 3:  # We need at least opening and closing delimiters
+                # Get the first code block (index 1)
+                code = parts[1]
+                # Remove language identifier if present (hcl, terraform, HCL, Terraform, etc.)
+                if code.strip().startswith(("hcl", "terraform", "HCL", "Terraform")):
+                    # Remove first line
+                    lines = code.split("\n", 1)
+                    if len(lines) > 1:
+                        code = lines[1]
+                    else:
+                        code = ""
+                return code.strip()
+    
+    # If no code blocks found, return the full response stripped
+    return response_text.strip()

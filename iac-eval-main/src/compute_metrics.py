@@ -50,6 +50,30 @@ def codebert_score(reference, candidate):
         print(f"  CodeBERT warning: {e}")
         return None
 
+def calculate_pass_at_k(n, c, k):
+    """
+    Unbiased pass@k estimator from "Evaluating Large Language Models Trained on Code" (Chen et al., 2021)
+    
+    Args:
+        n: total number of samples
+        c: number of correct samples
+        k: k in pass@k
+    
+    Returns:
+        Unbiased estimate of pass@k
+    
+    Formula: pass@k ≈ 1 - comb(n-c, k) / comb(n, k)
+    """
+    if n < k:
+        return 0.0
+    if c == n:
+        return 1.0
+    if c == 0:
+        return 0.0
+    
+    from math import comb
+    return 1.0 - comb(n - c, k) / comb(n, k)
+
 def compute_metrics_for_folder(dataset_folder, task_csv_path):
     import pandas as pd
     df = pd.read_csv(task_csv_path)
@@ -106,19 +130,42 @@ def compute_metrics_for_folder(dataset_folder, task_csv_path):
             task_groups[tid] = []
         task_groups[tid].append(r)
 
-    total_unique_tasks = len(task_groups)
-    passed_tasks_apply = 0
-    passed_tasks_spec = 0
+    # Calculate unbiased Pass@k using Chen et al. (2021) formula
+    # pass@k ≈ 1 - Product(1 - k/n, n-c+1, n) where c = # correct samples, n = total samples
+    # Simplified: pass@k = 1 - comb(n-c, k) / comb(n, k)
     
-    for tid, group in task_groups.items():
-        if any(s['apply_ok'] for s in group):
-            passed_tasks_apply += 1
-        if any(s['spec_ok'] for s in group):
-            passed_tasks_spec += 1
+    total_unique_tasks = len(task_groups)
+    
+    # Calculate Pass@1, Pass@3, Pass@5 for both apply and spec
+    k_values = [1, 3, 5]
+    pass_at_k_apply = {}
+    pass_at_k_spec = {}
+    
+    for k in k_values:
+        total_prob_apply = 0
+        total_prob_spec = 0
+        tasks_with_k_samples = 0
+        
+        for tid, group in task_groups.items():
+            n = len(group)
+            if n >= k:
+                c_apply = sum(1 for s in group if s['apply_ok'])
+                c_spec = sum(1 for s in group if s['spec_ok'])
+                
+                total_prob_apply += calculate_pass_at_k(n, c_apply, k)
+                total_prob_spec += calculate_pass_at_k(n, c_spec, k)
+                tasks_with_k_samples += 1
+        
+        if tasks_with_k_samples > 0:
+            pass_at_k_apply[k] = total_prob_apply / tasks_with_k_samples
+            pass_at_k_spec[k] = total_prob_spec / tasks_with_k_samples
+        else:
+            pass_at_k_apply[k] = 0.0
+            pass_at_k_spec[k] = 0.0
 
     total_samples = len(results)
-    avg_iter   = sum(r['iterations'] for r in results) / total_samples
-    avg_time   = sum(r['gen_time'] for r in results) / total_samples
+    avg_iter   = sum(r['iterations'] for r in results) / total_samples if total_samples > 0 else 0
+    avg_time   = sum(r['gen_time'] for r in results) / total_samples if total_samples > 0 else 0
     bleu_vals  = [r['bleu'] for r in results if r['bleu'] is not None]
     avg_bleu   = sum(bleu_vals) / len(bleu_vals) if bleu_vals else None
 
@@ -131,8 +178,15 @@ def compute_metrics_for_folder(dataset_folder, task_csv_path):
     print(f"  Directory:          {dataset_folder}")
     print(f"  Total Samples:      {total_samples}")
     print(f"  Unique Tasks:       {total_unique_tasks}")
-    print(f"  Pass@k (Apply):     {passed_tasks_apply}/{total_unique_tasks} ({passed_tasks_apply/total_unique_tasks:.1%})")
-    print(f"  Pass@k (Spec):      {passed_tasks_spec}/{total_unique_tasks} ({passed_tasks_spec/total_unique_tasks:.1%})")
+    
+    # Display unbiased Pass@k metrics
+    for k in k_values:
+        if k in pass_at_k_apply:
+            print(f"  Pass@{k} (Apply):     {pass_at_k_apply[k]:.1%}")
+    for k in k_values:
+        if k in pass_at_k_spec:
+            print(f"  Pass@{k} (Spec):      {pass_at_k_spec[k]:.1%}")
+    
     print(f"  Avg Iterations:     {avg_iter:.2f}")
     print(f"  Avg Gen Time (s):   {avg_time:.1f}")
     if avg_bleu is not None:

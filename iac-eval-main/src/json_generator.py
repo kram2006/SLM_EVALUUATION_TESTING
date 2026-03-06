@@ -76,7 +76,8 @@ def generate_dataset_entry(task_data, terraform_code, execution_results, verific
     model_short = model_config.get('id_prefix', model_key.lower())
     
     # Standardized Timestamps
-    now = datetime.utcnow()
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
     timestamp_file = now.strftime('%Y%m%d_%H%M%S')
     timestamp_iso = now.strftime('%Y-%m-%dT%H:%M:%SZ')
     
@@ -192,9 +193,9 @@ def generate_dataset_entry(task_data, terraform_code, execution_results, verific
             # FIX D2: Extract actual values from terraform code instead of hardcoding
             "inferred_defaults": {
                 "os_version": "Ubuntu 22.04" if "ubuntu" in terraform_code.lower() else "unknown",
-                "cpus": actual_cpus if actual_cpus else ("not_specified" if "cpu" not in prompt_lower else actual_cpus),
-                "ram_bytes": actual_memory if actual_memory else ("not_specified" if "ram" not in prompt_lower else actual_memory),
-                "disk_bytes": actual_disk if actual_disk else ("not_specified" if "disk" not in prompt_lower else actual_disk),
+                "cpus": actual_cpus if actual_cpus is not None else ("not_specified" if "cpu" not in prompt_lower else "not_detected"),
+                "ram_bytes": actual_memory if actual_memory is not None else ("not_specified" if "ram" not in prompt_lower else "not_detected"),
+                "disk_bytes": actual_disk if actual_disk is not None else ("not_specified" if "disk" not in prompt_lower else "not_detected"),
                 "network": "xenbr0" if "xenbr0" in terraform_code else ("Pool-wide" if "Pool-wide" in terraform_code else "not_detected"),
                 "storage_sr": "detected" if "name_label" in terraform_code and "storage" in terraform_code.lower() else "not_detected",
                 "ip_mode": "dhcp" if "dhcp" in terraform_code.lower() or "network {" in terraform_code else "not_detected"
@@ -221,9 +222,9 @@ def generate_dataset_entry(task_data, terraform_code, execution_results, verific
                 "command": "terraform plan -out=tfplan",
                 "exit_code": plan_res.get('exit_code', 1),
                 "execution_time_seconds": plan_res.get('execution_time_seconds', 0),
-                "resources_to_create": int(re.search(r'Plan: (\d+) to add', plan_res.get('stdout', '')).group(1)) if re.search(r'Plan: (\d+) to add', plan_res.get('stdout', '')) else 0,
-                "resources_to_modify": int(re.search(r'(\d+) to change', plan_res.get('stdout', '')).group(1)) if re.search(r'(\d+) to change', plan_res.get('stdout', '')) else 0,
-                "resources_to_destroy": int(re.search(r'(\d+) to destroy', plan_res.get('stdout', '')).group(1)) if re.search(r'(\d+) to destroy', plan_res.get('stdout', '')) else 0,
+                "resources_to_create": (lambda m: int(m.group(1)) if m else 0)(re.search(r'Plan: (\d+) to add', plan_res.get('stdout', ''))),
+                "resources_to_modify": (lambda m: int(m.group(1)) if m else 0)(re.search(r'(\d+) to change', plan_res.get('stdout', ''))),
+                "resources_to_destroy": (lambda m: int(m.group(1)) if m else 0)(re.search(r'(\d+) to destroy', plan_res.get('stdout', ''))),
                 "error_message": plan_res.get('stderr') if plan_res.get('exit_code') != 0 else None
             },
             "terraform_apply": {

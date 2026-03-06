@@ -112,7 +112,11 @@ class CreateValidation(ValidationStrategy):
                 spec_key = f'per_vm_{attr}' if attr != 'per_vm_disk_size' else 'per_vm_disk_size'
                 if spec_key in specs:
                     checks.append(attr)
-                    actual = max(vm.get('disk_sizes', [0])) if attr == 'per_vm_disk_size' else vm.get(attr)
+                    if attr == 'per_vm_disk_size':
+                        # Fix: Handle empty disk_sizes list
+                        actual = max(vm.get('disk_sizes', [0])) if vm.get('disk_sizes') else 0
+                    else:
+                        actual = vm.get(attr)
                     if actual != specs[spec_key]:
                         errors.append(f"SPEC ERROR: VM {i+1} {attr} mismatch. Expected {specs[spec_key]}, got {actual}.")
         
@@ -191,17 +195,44 @@ def verify_post_state(pre_vms, post_vms, task_data, specs=None):
     category = specs.get('category', '')
     errors = []
     
-    pre_by_name = {vm['name']: vm for vm in pre_vms}
-    post_by_name = {vm['name']: vm for vm in post_vms}
+    pre_by_name = {vm['name']: vm for vm in pre_vms if vm.get('name') is not None}
+    post_by_name = {vm['name']: vm for vm in post_vms if vm.get('name') is not None}
     
     if category == 'UPDATE':
         target = specs.get('target_vm')
         if len(pre_vms) != len(post_vms):
             errors.append("POST-STATE ERROR: VM count changed during UPDATE.")
-        # ... logic for UPDATE verification ...
+        
+        # Verify target VM was updated correctly
+        if target:
+            pre_vm = pre_by_name.get(target)
+            post_vm = post_by_name.get(target)
+            
+            if not post_vm:
+                errors.append(f"POST-STATE ERROR: Target VM '{target}' not found after UPDATE.")
+            elif pre_vm and post_vm:
+                # Check if the updated field matches the expected new value
+                updated_field = specs.get('updated_field')
+                new_value = specs.get('new_value')
+                
+                if updated_field and new_value:
+                    # Convert memory from GB to bytes if needed
+                    if updated_field == 'memory_max':
+                        post_value_bytes = int(post_vm.get('ram_gb', 0) * (1024**3))
+                        if post_value_bytes != new_value:
+                            errors.append(f"POST-STATE ERROR: VM '{target}' {updated_field} is {post_value_bytes}, expected {new_value}.")
+                    elif updated_field == 'cpus':
+                        post_value = post_vm.get('cpus', 0)
+                        if post_value != new_value:
+                            errors.append(f"POST-STATE ERROR: VM '{target}' {updated_field} is {post_value}, expected {new_value}.")
+                    
+                # Verify UUID unchanged (in-place update, not replace)
+                if pre_vm.get('uuid') != post_vm.get('uuid'):
+                    errors.append(f"POST-STATE ERROR: VM '{target}' UUID changed (replace instead of in-place update).")
     elif category == 'DELETE':
-        for name in specs.get('target_vms', [specs.get('target_vm')]):
-            if name in post_by_name:
+        target_vm_list = specs.get('target_vms') or ([specs.get('target_vm')] if specs.get('target_vm') else [])
+        for name in target_vm_list:
+            if name and name in post_by_name:
                 errors.append(f"POST-STATE ERROR: VM '{name}' still exists.")
 
     return {'passed': len(errors) == 0, 'errors': errors, 'details': {}}
