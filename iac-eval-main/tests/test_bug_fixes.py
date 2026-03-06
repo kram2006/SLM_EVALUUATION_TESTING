@@ -1,6 +1,9 @@
 import os
 import sys
 import tempfile
+import subprocess
+
+import pytest
 
 
 SRC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -9,7 +12,9 @@ if SRC_DIR not in sys.path:
 
 from eval_utils import extract_terraform_code
 from spec_checker import DeleteValidation
-from compute_metrics import compute_metrics_for_folder
+from compute_metrics import compute_metrics_for_folder, calculate_pass_at_k
+from evaluate import _validate_local_path, load_config
+from spec_checker import get_plan_json
 
 
 def test_extract_terraform_code_keeps_non_empty_when_language_line_has_no_newline():
@@ -48,3 +53,50 @@ def test_compute_metrics_exits_when_evaluation_lockfile_exists(capsys):
         out = capsys.readouterr().out
         assert result is None
         assert "Evaluation still running" in out
+
+
+def test_calculate_pass_at_k_handles_high_success_edge_case():
+    assert calculate_pass_at_k(5, 4, 3) == 1.0
+
+
+def test_extract_terraform_code_returns_empty_for_non_terraform_text():
+    assert extract_terraform_code("Here is an explanation with no code.") == ""
+
+
+def test_delete_validation_rejects_unexpected_create_actions():
+    validator = DeleteValidation()
+    vm_resources = [
+        {"action": "delete", "name_label": "web-01"},
+        {"action": "create", "name_label": "web-new"},
+    ]
+    specs = {"delete_count": 1, "target_vm": "web-01"}
+
+    errors, _, _ = validator.validate(vm_resources, specs)
+
+    assert any("should not create/update/replace" in e for e in errors)
+
+
+def test_get_plan_json_reports_timeout(monkeypatch):
+    def _raise_timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd="terraform", timeout=60)
+
+    monkeypatch.setattr("spec_checker.subprocess.run", _raise_timeout)
+    plan, err = get_plan_json(".")
+    assert plan is None
+    assert "timed out" in err.lower()
+
+
+def test_validate_local_path_blocks_traversal():
+    with pytest.raises(ValueError):
+        _validate_local_path("../config.yaml", "--config")
+
+
+def test_load_config_raises_for_invalid_config():
+    with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:
+        f.write("{}")
+        temp_path = f.name
+    try:
+        with pytest.raises(ValueError):
+            load_config(temp_path)
+    finally:
+        os.remove(temp_path)

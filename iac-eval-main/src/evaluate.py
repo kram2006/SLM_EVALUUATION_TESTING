@@ -2,6 +2,7 @@ import os
 import sys
 import logging
 import argparse
+import hashlib
 import yaml
 import csv
 import asyncio
@@ -24,6 +25,13 @@ from eval_utils import (
 )
 from eval_core import evaluate_task
 from models import GlobalConfig, ModelConfig
+
+def _validate_local_path(path_value, arg_name):
+    normalized = os.path.normpath(path_value)
+    path_parts = normalized.split(os.sep)
+    if ".." in path_parts:
+        raise ValueError(f"Invalid {arg_name} path: parent directory traversal is not allowed.")
+    return normalized
 
 def load_config(config_path):
     import re
@@ -71,7 +79,7 @@ def load_config(config_path):
         GlobalConfig(**expanded)
         logging.info(f"Config {config_path} validated successfully.")
     except Exception as e:
-        logging.warning(f"Config validation warning: {e}")
+        raise ValueError(f"Config validation failed for {config_path}: {e}") from e
         
     return expanded
 
@@ -91,6 +99,9 @@ async def main():
     parser.add_argument("--enhance-strat", "-e", dest="enhance_strat", choices=["", "COT", "FSP"], default="", help="Prompt enhancement strategy")
   
     args = parser.parse_args()
+    args.config = _validate_local_path(args.config, "--config")
+    args.dataset = _validate_local_path(args.dataset, "--dataset")
+    args.output_dir = _validate_local_path(args.output_dir, "--output_dir")
 
     if args.chain and args.plan_only:
         print(f"\n{RED}{BOLD}ERROR: --plan-only is incompatible with --chain.{RESET}")
@@ -101,7 +112,8 @@ async def main():
     
     model_name = args.model
     if model_name not in expanded_config['models']:
-        print(f"{RED}Error: Model '{model_name}' not found in config.{RESET}")
+        available = ", ".join(sorted(expanded_config.get('models', {}).keys()))
+        print(f"{RED}Error: Model '{model_name}' not found in config. Available models: {available}{RESET}")
         return
     
     expanded_config['active_model_name'] = model_name
@@ -171,6 +183,8 @@ async def main():
             # Chained mode: Shared workspace for all tasks in this sample
             chain_ids = [t['task_id'].replace('.', '_') for t in tasks]
             chain_slug = "_".join(chain_ids)
+            if len(chain_slug) > 50:
+                chain_slug = hashlib.md5(chain_slug.encode("utf-8")).hexdigest()[:16]
             workspace_dir = os.path.join(args.output_dir, "terraform_code", model_config['folder_name'], f"chain_{chain_slug}_p{pass_num}")
             os.makedirs(workspace_dir, exist_ok=True)
             
@@ -212,7 +226,10 @@ async def main():
     # Launch parallel samples
     print(f"\n{BOLD}{CYAN}>>> Launching {num_passes} parallel samples...{RESET}")
     sample_tasks = [run_sample(p) for p in range(pass_start, pass_start + num_passes)]
-    await asyncio.gather(*sample_tasks)
+    results = await asyncio.gather(*sample_tasks, return_exceptions=True)
+    exceptions = [result for result in results if isinstance(result, Exception)]
+    if exceptions:
+        raise exceptions[0]
 
     print(f"\n{BOLD}{GREEN}Evaluation Complete. All files saved to: {os.path.abspath(args.output_dir)}{RESET}")
 

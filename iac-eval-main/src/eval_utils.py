@@ -143,5 +143,7 @@ def extract_terraform_code(response_text):
                     code = lines[1] if len(lines) > 1 else lines[0]
                 return code.strip()
     
-    # If no code blocks found, return the full response stripped
-    return response_text.strip()
+    # If no code blocks found, only return text that appears to be Terraform/HCL
+    stripped = response_text.strip()
+    terraform_markers = ('resource "', 'data "', 'provider "', 'terraform {', 'variable "', 'output "')
+    return stripped if any(marker in stripped for marker in terraform_markers) else ""

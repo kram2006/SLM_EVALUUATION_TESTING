@@ -17,12 +17,18 @@ from xo_client import XenOrchestraClient
 from spec_checker import check_spec_accuracy, get_plan_json, verify_post_state
 from prompt_templates import CoT_prompt, FSP_prompt, multi_turn_plan_error_prompt
 
+VALID_TASK_CATEGORIES = {"CREATE", "READ", "UPDATE", "DELETE"}
+MAX_ERROR_HISTORY = 5
+
 async def evaluate_task(task, config, client, output_dir, workspace_override=None, initial_history=None, plan_only=False, sample_num=0, chain_index=0, no_confirm=False, enhance_strat=""):
     """
     Core evaluation logic for a single task and sample.
     Orchestrates LLM generation, Terraform execution, and state verification.
     """
     task_id = task['task_id'].lower().replace('.', '_') # Convert C1.2 to c1_2
+    task_category = task.get('category', '').strip().upper()
+    if task_category and task_category not in VALID_TASK_CATEGORIES:
+        raise ValueError(f"Unsupported task category '{task.get('category')}' for task {task.get('task_id')}")
     model_name = config['active_model_name']
     model_config = config['models'][model_name]
     
@@ -63,8 +69,6 @@ async def evaluate_task(task, config, client, output_dir, workspace_override=Non
     url = xo_cfg.get('url', 'ws://localhost:8080/api/')
     url = url.removesuffix('/api/').removesuffix('/api')
     system_prompt = system_prompt.replace("{XO_URL}", url)
-    system_prompt = system_prompt.replace("{XO_USER}", xo_cfg.get('username', ''))
-    system_prompt = system_prompt.replace("{XO_PASS}", xo_cfg.get('password', ''))
     
     # Pre-compute TF_VARs for terraform subprocesses
     tf_env = {
@@ -150,7 +154,6 @@ async def evaluate_task(task, config, client, output_dir, workspace_override=Non
     else:
         pre_verification = await xo_client.verify_vms()
 
-    vision_results = {} 
     expected_error = None
     try:
         reqs = json.loads(task.get('resource_requirements', '{}'))
@@ -240,8 +243,8 @@ terraform {{
 }}
 provider "xenorchestra" {{
   url      = "{url}"
-  username = "{xo_cfg.get('username', '')}"
-  password = "{xo_cfg.get('password', '')}"
+  username = "${{var.xo_username}}"
+  password = "${{var.xo_password}}"
   insecure = true
 }}
 """
@@ -250,6 +253,7 @@ provider "xenorchestra" {{
                 init_res["status"] = "failed"
                 if iteration < MAX_ITERATIONS:
                     error_history.append("Your response contained no valid Terraform code. You must write a complete main.tf file with hcl syntax.")
+                    error_history = error_history[-MAX_ERROR_HISTORY:]
                     continue
                 else: break
 
@@ -268,6 +272,7 @@ provider "xenorchestra" {{
         save_log(os.path.join(task_log_dir, f"init_iter{iteration}.log"), init_res['stdout'] + init_res['stderr'])
         if init_res['exit_code'] != 0:
             error_history.append(f"Init failed:\n{init_res['stderr']}")
+            error_history = error_history[-MAX_ERROR_HISTORY:]
             continue
 
         log_step("Running terraform validate")
@@ -275,6 +280,7 @@ provider "xenorchestra" {{
         save_log(os.path.join(task_log_dir, f"validate_iter{iteration}.log"), val_res['stdout'] + val_res['stderr'])
         if val_res['exit_code'] != 0:
             error_history.append(f"Validation failed:\n{val_res['stderr']}")
+            error_history = error_history[-MAX_ERROR_HISTORY:]
             continue
 
         log_step("Running terraform plan")
@@ -282,12 +288,15 @@ provider "xenorchestra" {{
         save_log(os.path.join(task_log_dir, f"plan_iter{iteration}.log"), plan_res['stdout'] + plan_res['stderr'])
         
         if expected_error == 'resource_exhaustion':
-             if plan_res['exit_code'] != 0 and ('insufficient' in plan_res['stderr'].lower() or 'memory' in plan_res['stderr'].lower()):
+             stderr_lower = plan_res.get('stderr', '').lower()
+             exhaustion_markers = ('insufficient memory', 'out of memory', 'not enough memory', 'resource_exhaustion')
+             if plan_res['exit_code'] != 0 and any(marker in stderr_lower for marker in exhaustion_markers):
                  success = True
                  execution_results = {'outcome': 'success', 'details': 'Expected failure verified'}
                  break
         if plan_res['exit_code'] != 0:
             error_history.append(f"Plan failed:\n{plan_res['stderr']}")
+            error_history = error_history[-MAX_ERROR_HISTORY:]
             continue
 
         log_step("Running Spec Accuracy Check")
@@ -305,6 +314,7 @@ provider "xenorchestra" {{
                 spec_fail_count += 1
                 if spec_fail_count >= 2: break
                 error_history.append("SPEC ACCURACY ERRORS:\n" + "\n".join(spec_accuracy_result['errors']))
+                error_history = error_history[-MAX_ERROR_HISTORY:]
                 continue
 
         if plan_only:
@@ -319,6 +329,7 @@ provider "xenorchestra" {{
         save_log(os.path.join(task_log_dir, f"apply_iter{iteration}.log"), apply_res['stdout'] + apply_res['stderr'])
         if apply_res['exit_code'] != 0:
             error_history.append(f"Apply failed:\n{apply_res['stderr']}")
+            error_history = error_history[-MAX_ERROR_HISTORY:]
             continue
             
         success = True
@@ -332,7 +343,6 @@ provider "xenorchestra" {{
     
     post_state_result = {'status': 'skipped', 'passed': None, 'errors': [], 'details': {'note': 'Not executed'}}
     if workspace_override and not plan_only and success:
-        task_category = task.get('category', '').strip().upper()
         if task_category in ('UPDATE', 'DELETE'):
             post_state_result = verify_post_state(pre_verification.get('vm_details', []), post_verification.get('vm_details', []), task)
     
@@ -345,7 +355,7 @@ provider "xenorchestra" {{
 
     entry = generate_dataset_entry(
         task_data=task, terraform_code=terraform_code, execution_results=full_execution_results,
-        verification_data=post_verification, pre_verification_data=pre_verification, config=config, vision_data=vision_results
+        verification_data=post_verification, pre_verification_data=pre_verification, config=config
     )
     save_dataset_entry(entry, output_dir, config)
     return messages

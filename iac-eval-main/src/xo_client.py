@@ -66,8 +66,7 @@ class XenOrchestraClient:
                 if self._objects_cache is None or (now - self._cache_timestamp) > self._cache_ttl:
                     vms = await self._call("xo.getAllObjects")
                     if vms:
-                        self._objects_cache = vms
-                        self._cache_timestamp = now
+                        self._objects_cache, self._cache_timestamp = vms, now
                     else:
                         logging.warning("Failed to refresh XO objects cache.")
                 
