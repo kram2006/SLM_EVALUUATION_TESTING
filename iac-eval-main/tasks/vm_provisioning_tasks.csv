@@ -21,7 +21,7 @@ data ""xenorchestra_pool"" ""pool"" {
 
 data ""xenorchestra_template"" ""template"" {
   pool_id    = data.xenorchestra_pool.pool.id
-  name_label = ""Other install media""
+  name_label = ""Ubuntu-22""
 }
 
 data ""xenorchestra_sr"" ""sr"" {
@@ -73,7 +73,7 @@ data ""xenorchestra_pool"" ""pool"" {
 
 data ""xenorchestra_template"" ""template"" {
   pool_id    = data.xenorchestra_pool.pool.id
-  name_label = ""Other install media""
+  name_label = ""Ubuntu-22""
 }
 
 data ""xenorchestra_sr"" ""sr"" {
@@ -131,7 +131,7 @@ data ""xenorchestra_pool"" ""pool"" {
 
 data ""xenorchestra_template"" ""template"" {
   pool_id    = data.xenorchestra_pool.pool.id
-  name_label = ""Other install media""
+  name_label = ""Ubuntu-22""
 }
 
 data ""xenorchestra_sr"" ""sr"" {
@@ -189,7 +189,7 @@ data ""xenorchestra_pool"" ""pool"" {
 
 data ""xenorchestra_template"" ""template"" {
   pool_id    = data.xenorchestra_pool.pool.id
-  name_label = ""Other install media""
+  name_label = ""Ubuntu-22""
 }
 
 data ""xenorchestra_sr"" ""sr"" {
@@ -246,7 +246,7 @@ data ""xenorchestra_pool"" ""pool"" {
 
 data ""xenorchestra_template"" ""template"" {
   pool_id    = data.xenorchestra_pool.pool.id
-  name_label = ""Other install media""
+  name_label = ""Ubuntu-22""
 }
 
 data ""xenorchestra_sr"" ""sr"" {
@@ -283,7 +283,7 @@ resource ""xenorchestra_vm"" ""vm"" {
 
   tags = [""iso-install"", ""ubuntu-22.04""]
 }",52,5,9,5
-R1.2,READ,little_context,List all VMs with their RAM allocation,{},"[""data.xenorchestra_vm""]",,,"terraform {
+R1.2,READ,little_context,List all VMs with their RAM allocation,{},"[""data.xenorchestra_vms""]",,,"terraform {
   required_providers {
     xenorchestra = {
       source  = ""terra-farm/xenorchestra""
@@ -332,7 +332,7 @@ data ""xenorchestra_pool"" ""pool"" {
 
 data ""xenorchestra_template"" ""template"" {
   pool_id    = data.xenorchestra_pool.pool.id
-  name_label = ""Other install media""
+  name_label = ""Ubuntu-22""
 }
 
 data ""xenorchestra_sr"" ""sr"" {
@@ -403,7 +403,7 @@ data ""xenorchestra_pool"" ""pool"" {
 
 data ""xenorchestra_template"" ""template"" {
   pool_id    = data.xenorchestra_pool.pool.id
-  name_label = ""Other install media""
+  name_label = ""Ubuntu-22""
 }
 
 data ""xenorchestra_sr"" ""sr"" {
@@ -455,7 +455,7 @@ data ""xenorchestra_pool"" ""pool"" {
 
 data ""xenorchestra_template"" ""template"" {
   pool_id    = data.xenorchestra_pool.pool.id
-  name_label = ""Other install media""
+  name_label = ""Ubuntu-22""
 }
 
 data ""xenorchestra_sr"" ""sr"" {

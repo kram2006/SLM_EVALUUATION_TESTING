@@ -29,6 +29,11 @@ def load_config(config_path):
     import re
     # Custom loader to handle env vars
     pattern = re.compile(r'\$\{([^}^{]+)\}')
+    
+    # Use a custom Loader class to avoid global state pollution
+    class EnvVarLoader(yaml.SafeLoader):
+        pass
+    
     def env_var_constructor(loader, node):
         value = loader.construct_scalar(node)
         match = pattern.match(value)
@@ -37,11 +42,12 @@ def load_config(config_path):
             return os.environ.get(env_var, value)
         return value
 
-    yaml.add_implicit_resolver('!env', pattern, None, yaml.SafeLoader)
-    yaml.add_constructor('!env', env_var_constructor, yaml.SafeLoader)
+    # Register the resolver only for this specific loader instance
+    EnvVarLoader.add_implicit_resolver('!env', pattern, None)
+    EnvVarLoader.add_constructor('!env', env_var_constructor)
     
     with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
+        config = yaml.load(f, Loader=EnvVarLoader)
         
     def expand_env_vars(data):
         if isinstance(data, dict):

@@ -23,33 +23,37 @@ class XenOrchestraClient:
         """Internal helper to call JSON-RPC via WebSocket"""
         try:
             async with websockets.connect(self.url, open_timeout=10, close_timeout=5, max_size=25 * 1024 * 1024) as ws:
-                login_payload = {
-                    "jsonrpc": "2.0",
-                    "method": "session.signIn",
-                    "params": {"email": self.username, "password": self.password},
-                    "id": "login"
-                }
-                await ws.send(json.dumps(login_payload))
-                login_resp = json.loads(await asyncio.wait_for(ws.recv(), timeout=15))
-                
-                if "error" in login_resp:
-                    logging.error(f"XO Login failed: {login_resp['error']}")
-                    return None
-
-                call_payload = {
-                    "jsonrpc": "2.0",
-                    "method": method,
-                    "params": params or {},
-                    "id": "call"
-                }
-                await ws.send(json.dumps(call_payload))
-                call_resp = json.loads(await asyncio.wait_for(ws.recv(), timeout=30))
-                
-                if "error" in call_resp:
-                    logging.error(f"XO Method {method} failed: {call_resp['error']}")
-                    return None
+                try:
+                    login_payload = {
+                        "jsonrpc": "2.0",
+                        "method": "session.signIn",
+                        "params": {"email": self.username, "password": self.password},
+                        "id": "login"
+                    }
+                    await ws.send(json.dumps(login_payload))
+                    login_resp = json.loads(await asyncio.wait_for(ws.recv(), timeout=15))
                     
-                return call_resp.get("result")
+                    if "error" in login_resp:
+                        logging.error(f"XO Login failed: {login_resp['error']}")
+                        return None
+
+                    call_payload = {
+                        "jsonrpc": "2.0",
+                        "method": method,
+                        "params": params or {},
+                        "id": "call"
+                    }
+                    await ws.send(json.dumps(call_payload))
+                    call_resp = json.loads(await asyncio.wait_for(ws.recv(), timeout=30))
+                    
+                    if "error" in call_resp:
+                        logging.error(f"XO Method {method} failed: {call_resp['error']}")
+                        return None
+                        
+                    return call_resp.get("result")
+                except asyncio.TimeoutError:
+                    logging.error(f"XO WebSocket timeout during {method}")
+                    return None
         except Exception as e:
             logging.error(f"XO WebSocket communication error: {str(e)}")
             return None
@@ -96,8 +100,8 @@ class XenOrchestraClient:
                 
                 memory_obj = vm.get('memory') or vm.get('$memory') or {}
                 if isinstance(memory_obj, dict):
-                    static_mem = memory_obj.get('static', [0, 0])
-                    memory_max = static_mem[1] if isinstance(static_mem, (list, tuple)) and len(static_mem) >= 2 else memory_obj.get('size', 0)
+                    static_mem = memory_obj.get('static', [0, 0]) or [0, 0]
+                    memory_max = int(static_mem[1]) if isinstance(static_mem, (list, tuple)) and len(static_mem) >= 2 else int(memory_obj.get('size', 0) or 0)
                 else:
                     memory_max = 0
                 

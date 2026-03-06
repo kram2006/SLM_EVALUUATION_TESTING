@@ -86,12 +86,21 @@ async def execute_terraform_apply(workspace_dir, env=None):
 
 def unload_ollama_model(model_config):
     """Unload Ollama model from VRAM by setting keep_alive to 0"""
-    if not model_config or 'ollama' not in model_config.get('name', '').lower():
+    if not model_config:
+        return
+    
+    # Check both the name field and base_url for Ollama indicators
+    name = model_config.get('name', '').lower()
+    base_url = model_config.get('base_url', '')
+    
+    is_ollama = 'ollama' in name or 'localhost:11434' in base_url
+    if not is_ollama:
         return
         
     try:
-        base_url = model_config.get('base_url', 'http://localhost:11434/v1')
-        ollama_url = base_url.replace('/v1', '/api/generate')
+        if 'localhost:11434' not in base_url:
+            base_url = 'http://localhost:11434/v1'
+        ollama_url = base_url.replace('/v1', '/api/generate').replace('/v1/chat/completions', '/api/generate')
         
         payload = {
             "model": model_config['name'],
