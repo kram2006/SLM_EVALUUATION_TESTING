@@ -70,6 +70,8 @@ def calculate_pass_at_k(n, c, k):
         return 1.0
     if c == 0:
         return 0.0
+    if n - c < k:
+        return 1.0
     
     from math import comb
     return 1.0 - comb(n - c, k) / comb(n, k)

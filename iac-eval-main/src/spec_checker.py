@@ -43,6 +43,8 @@ def get_plan_json(workspace_dir):
         if result.returncode != 0:
             return None, f"terraform show -json failed: {result.stderr}"
         return json.loads(result.stdout), None
+    except subprocess.TimeoutExpired:
+        return None, "terraform show -json timed out after 60 seconds"
     except Exception as e:
         return None, str(e)
 
@@ -151,6 +153,9 @@ class DeleteValidation(ValidationStrategy):
     def validate(self, vm_resources, specs, pre_vms=None):
         errors, checks, details = [], ['action_type_only_delete'], {}
         deletes = [r for r in vm_resources if r['action'] == 'delete']
+        forbidden = [r for r in vm_resources if r['action'] in ('create', 'replace', 'update')]
+        if forbidden:
+            errors.append(f"SPEC ERROR: DELETE task should not create/update/replace VMs (found {forbidden[0]['action']}).")
         
         expected = specs.get('delete_count')
         if expected and len(deletes) != expected:

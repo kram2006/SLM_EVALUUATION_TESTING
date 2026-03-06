@@ -9,6 +9,8 @@ from datetime import datetime
 import ast
 import operator as _op
 
+RAM_MARGIN_PERCENT = 0.05
+
 def _safe_eval_arith(expr):
     """Safely evaluate simple arithmetic like '4 * 1024 * 1024 * 1024'."""
     _ops = {ast.Mult: _op.mul, ast.Add: _op.add, ast.Sub: _op.sub}
@@ -25,7 +27,7 @@ def _safe_eval_arith(expr):
 
 def extract_hcl_total_value(key, code):
     """Sum all occurrences of key = value in HCL, supporting arithmetic expressions."""
-    pattern = fr"{key}\s*=\s*([\d][\d\s\*\+\-]*)"
+    pattern = fr"(?m)^\s*{re.escape(key)}\s*=\s*(\d(?:[\d\s]*[+\-*]\s*\d+)*)\s*$"
     matches = re.findall(pattern, code)
     results = []
     for v in matches:
@@ -57,9 +59,9 @@ def _check_vm_ram(actual_memory, verification_data, terraform_code):
     target = actual_memory if actual_memory else 1024**3
     
     for vm in verification_data['vm_details']:
-        vm_ram = vm.get('ram_gb', 0) * 1024**3
+        vm_ram = int(round((vm.get('ram_gb', 0) or 0) * 1024**3))
         # Allow 5% margin for overhead
-        if abs(vm_ram - target) > (0.05 * target):
+        if abs(vm_ram - target) > int(RAM_MARGIN_PERCENT * target):
             return False
     return True
 
@@ -127,20 +129,22 @@ def generate_dataset_entry(task_data, terraform_code, execution_results, verific
     
     vm_count = reqs.get('count', 1) or 1
     
-    # Normalize expected values to per-VM if they look like totals
-    # This assumes CSV requirements might be totals for multi-VM tasks
+    # Normalize expected values to per-VM only when explicit total fields are provided
+    total_memory = reqs.get('total_memory_max_bytes')
+    total_cpus = reqs.get('total_cpus')
+    total_disk = reqs.get('total_size_bytes')
     if vm_count > 1:
-        if expected_memory and expected_memory >= (2 * 1024**3) * vm_count: # Heuristic: if > total typical RAM
-             expected_memory //= vm_count
-        if expected_cpus and expected_cpus >= 2 * vm_count:
-             expected_cpus //= vm_count
-        if expected_disk and expected_disk >= (20 * 1024**3) * vm_count:
-             expected_disk //= vm_count
+        if total_memory:
+             expected_memory = round(total_memory / vm_count)
+        if total_cpus:
+             expected_cpus = round(total_cpus / vm_count)
+        if total_disk:
+             expected_disk = round(total_disk / vm_count)
 
     # Calculate per-VM actual values
-    actual_memory = actual_total_memory // vm_count if actual_total_memory else None
-    actual_cpus = actual_total_cpus // vm_count if actual_total_cpus else None
-    actual_disk = actual_total_disk // vm_count if actual_total_disk else None
+    actual_memory = round(actual_total_memory / vm_count) if actual_total_memory else None
+    actual_cpus = round(actual_total_cpus / vm_count) if actual_total_cpus else None
+    actual_disk = round(actual_total_disk / vm_count) if actual_total_disk else None
 
     # Logic for "Meets Requirements"
     expected_failure_matched = execution_results.get('expected_failure_matched', False)
@@ -305,8 +309,8 @@ def generate_dataset_entry(task_data, terraform_code, execution_results, verific
         
         # FIX C2: Filter VMs by target_vm name — fall back to empty dict, not pre_vms[0]
         target_vm_name = reqs.get('target_vm', '')
-        pre_vm = next((vm for vm in pre_vms if vm.get('name') == target_vm_name), {})
-        post_vm = next((vm for vm in post_vms if vm.get('name') == target_vm_name), {})
+        pre_vm = next((vm for vm in pre_vms if vm.get('name') == target_vm_name), None)
+        post_vm = next((vm for vm in post_vms if vm.get('name') == target_vm_name), None)
         
         # Thread actual spec_checker results instead of fabricated constants
         spec_details = execution_results.get('spec_accuracy', {}).get('details', {})
@@ -314,15 +318,15 @@ def generate_dataset_entry(task_data, terraform_code, execution_results, verific
             "target_vm": target_vm_name,
             "plan_shows_in_place_update": not spec_details.get('had_replace_actions', False), 
             "plan_shows_destroy_create": spec_details.get('had_replace_actions', False), 
-            "vm_uuid_before": pre_vm.get('uuid', 'unknown'), 
-            "vm_uuid_after": post_vm.get('uuid', 'unknown'), 
+            "vm_uuid_before": (pre_vm or {}).get('uuid', 'unknown'), 
+            "vm_uuid_after": (post_vm or {}).get('uuid', 'unknown'), 
             "uuid_unchanged": pre_vm.get('uuid') == post_vm.get('uuid') if pre_vm and post_vm else False, 
             "vm_downtime_seconds": 0, 
             "resource_change_correct": execution_results.get('spec_accuracy', {}).get('passed', True), 
-            "ram_before_gb": pre_vm.get('ram_gb', 0), 
-            "ram_after_gb": post_vm.get('ram_gb', 0), 
-            "cpu_before": pre_vm.get('cpus', 0), 
-            "cpu_after": post_vm.get('cpus', 0) 
+            "ram_before_gb": (pre_vm or {}).get('ram_gb', 0), 
+            "ram_after_gb": (post_vm or {}).get('ram_gb', 0), 
+            "cpu_before": (pre_vm or {}).get('cpus', 0), 
+            "cpu_after": (post_vm or {}).get('cpus', 0) 
         }
 
     if reqs.get('expected_error') == 'resource_exhaustion':
