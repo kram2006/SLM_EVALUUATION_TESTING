@@ -107,26 +107,27 @@ async def main():
     expanded_config['active_model_name'] = model_name
     model_config = expanded_config['models'][model_name]
     
-    # Initialize appropriate client
-    if model_config.get('local'):
-        client = LocalTransformersClient(
-            model_name=model_config['name'],
-            temperature=model_config.get('temperature', 0.2),
-            max_tokens=model_config.get('max_tokens', 4096),
-            seed=args.seed or model_config.get('seed')
-        )
-    else:
+    base_seed = args.seed if args.seed is not None else model_config.get('seed')
+
+    def create_client(sample_seed=None):
+        if model_config.get('local'):
+            return LocalTransformersClient(
+                model_name=model_config['name'],
+                temperature=model_config.get('temperature', 0.2),
+                max_tokens=model_config.get('max_tokens', 4096),
+                seed=sample_seed
+            )
+
         api_key = model_config.get('api_key') or os.environ.get('OPENROUTER_API_KEY') or expanded_config.get('openrouter', {}).get('api_key')
         base_url = model_config.get('base_url') or expanded_config.get('openrouter', {}).get('base_url', "https://openrouter.ai/api/v1/chat/completions")
-        
-        client = OpenRouterClient(
+        return OpenRouterClient(
             api_key=api_key,
             model_name=model_config['name'],
             temperature=model_config.get('temperature', 0.2),
             max_tokens=model_config.get('max_tokens', 4096),
             base_url=base_url,
             timeout=300,
-            seed=args.seed or model_config.get('seed')
+            seed=sample_seed
         )
 
     # Load Tasks
@@ -159,6 +160,8 @@ async def main():
     async def run_sample(pass_idx):
         """Run a single Pass@k sample (standalone or chain)."""
         pass_num = pass_idx + 1
+        sample_seed = (base_seed + pass_idx) if base_seed is not None else None
+        client = create_client(sample_seed)
         log_step(f"Starting Pass {pass_num}")
         
         has_previous_run = None

@@ -76,6 +76,11 @@ def calculate_pass_at_k(n, c, k):
 
 def compute_metrics_for_folder(dataset_folder, task_csv_path):
     import pandas as pd
+    lockfile = os.path.join(dataset_folder, ".evaluation_in_progress")
+    if os.path.exists(lockfile):
+        print(f"ERROR: Evaluation still running in {dataset_folder}. Wait for completion.")
+        return
+
     df = pd.read_csv(task_csv_path)
     ref_map = {}
     if 'reference_hcl' in df.columns:

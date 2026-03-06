@@ -89,7 +89,17 @@ class OpenRouterClient:
                 
                 if response.status_code == 200:
                     data = response.json()
-                    return data['choices'][0]['message']['content']
+                    choices = data.get('choices')
+                    if not isinstance(choices, list) or not choices:
+                        logging.error(f"Malformed API response: missing choices list ({data})")
+                        return None
+
+                    message = choices[0].get('message', {}) if isinstance(choices[0], dict) else {}
+                    content = message.get('content')
+                    if content is None:
+                        logging.error(f"Malformed API response: missing message.content ({choices[0]})")
+                        return None
+                    return content
                 elif response.status_code == 429:
                     wait_time = (2 ** attempt) * 2
                     logging.warning(f"Rate limited. Waiting {wait_time}s...")

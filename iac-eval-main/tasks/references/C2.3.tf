@@ -24,7 +24,7 @@ data "xenorchestra_pool" "pool" {
 
 data "xenorchestra_template" "template" {
   pool_id    = data.xenorchestra_pool.pool.id
-  name_label = "Other install media"
+  name_label = "Ubuntu-22"
 }
 
 data "xenorchestra_sr" "sr" {

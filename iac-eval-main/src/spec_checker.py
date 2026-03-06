@@ -155,6 +155,23 @@ class DeleteValidation(ValidationStrategy):
         expected = specs.get('delete_count')
         if expected and len(deletes) != expected:
             errors.append(f"SPEC ERROR: Expected {expected} deletions, found {len(deletes)}.")
+
+        target_vms = specs.get('target_vms', [])
+        if specs.get('target_vm'):
+            target_vms = [specs['target_vm']]
+
+        if target_vms:
+            checks.append('correct_vms_targeted')
+            deleted_names = {r.get('name_label') for r in deletes if r.get('name_label')}
+            target_set = set(target_vms)
+
+            for target in target_vms:
+                if target not in deleted_names:
+                    errors.append(f"SPEC ERROR: Target VM '{target}' not marked for deletion.")
+
+            extra = deleted_names - target_set
+            if extra:
+                errors.append(f"SPEC ERROR: Extra VMs deleted: {sorted(extra)}")
             
         return errors, checks, details
 

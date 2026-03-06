@@ -140,10 +140,7 @@ def extract_terraform_code(response_text):
                 if code.strip().startswith(("hcl", "terraform", "HCL", "Terraform")):
                     # Remove first line
                     lines = code.split("\n", 1)
-                    if len(lines) > 1:
-                        code = lines[1]
-                    else:
-                        code = ""
+                    code = lines[1] if len(lines) > 1 else lines[0]
                 return code.strip()
     
     # If no code blocks found, return the full response stripped
