@@ -4,7 +4,7 @@ import requests
 import json
 import logging
 from huggingface_hub import InferenceClient
-from utils import extract_terraform_code
+from eval_utils import extract_terraform_code
 
 class OpenRouterClient:
     def __init__(self, api_key=None, model_name=None, temperature=0.2, max_tokens=4096, base_url="https://openrouter.ai/api/v1/chat/completions", timeout=300, seed=None):
@@ -125,7 +125,7 @@ class OpenRouterClient:
         return extract_terraform_code(response_text)
 
 class LocalTransformersClient:
-    def __init__(self, model_name, temperature=0.2, max_tokens=4096):
+    def __init__(self, model_name, temperature=0.2, max_tokens=4096, seed=None):
         import torch
         from transformers import AutoTokenizer, AutoModelForCausalLM
         
