@@ -17,6 +17,23 @@ from xo_client import XenOrchestraClient
 from spec_checker import check_spec_accuracy, get_plan_json, verify_post_state
 from prompt_templates import CoT_prompt, FSP_prompt, multi_turn_plan_error_prompt
 
+def extract_compact_state(tfstate_content):
+    """Extract a compact resource summary from terraform state JSON."""
+    try:
+        state = json.loads(tfstate_content)
+        resources = []
+        for res in state.get('resources', []):
+            instances = res.get('instances', [])
+            attrs = instances[0].get('attributes', {}) if instances else {}
+            resources.append({
+                'type': res.get('type'),
+                'name': res.get('name'),
+                'id': attrs.get('id')
+            })
+        return json.dumps(resources, indent=2)
+    except Exception:
+        return "{}"
+
 async def evaluate_task(task, config, client, output_dir, workspace_override=None, initial_history=None, plan_only=False, sample_num=0, chain_index=0, no_confirm=False, enhance_strat=""):
     """
     Core evaluation logic for a single task and sample.
@@ -61,7 +78,6 @@ async def evaluate_task(task, config, client, output_dir, workspace_override=Non
     # Inject XO credentials/URL into system prompt
     xo_cfg = config.get('xenorchestra', {})
     url = xo_cfg.get('url', 'ws://localhost:8080/api/')
-    url = url.removesuffix('/api/').removesuffix('/api')
     system_prompt = system_prompt.replace("{XO_URL}", url)
     system_prompt = system_prompt.replace("{XO_USER}", xo_cfg.get('username', ''))
     system_prompt = system_prompt.replace("{XO_PASS}", xo_cfg.get('password', ''))
@@ -78,10 +94,8 @@ async def evaluate_task(task, config, client, output_dir, workspace_override=Non
             try:
                 with open(tfstate_path, "r", encoding="utf-8") as f:
                     tfstate_content = f.read()
-                # FLAW FIX: Cap tfstate to 4000 chars to prevent system prompt bloat
-                if len(tfstate_content) > 4000:
-                    tfstate_content = tfstate_content[:4000] + "\n... [TRUNCATED - full state in terraform.tfstate]"
-                system_prompt += f"\n\nExisting Infrastructure (CURRENT STATE from terraform.tfstate):\n```json\n{tfstate_content}\n```\n"
+                compact_state = extract_compact_state(tfstate_content)
+                system_prompt += f"\n\nExisting Infrastructure (CURRENT STATE from terraform.tfstate):\n```json\n{compact_state}\n```\n"
                 log_step("Injected terraform.tfstate into system prompt to save context memory")
             except Exception as e:
                 log_error(f"Failed to read tfstate for context: {e}")

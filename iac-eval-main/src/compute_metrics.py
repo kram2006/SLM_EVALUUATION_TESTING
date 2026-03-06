@@ -2,6 +2,7 @@ import os
 import json
 import glob
 import re
+import nltk
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 
 try:
@@ -10,6 +11,21 @@ try:
 except ImportError:
     CODEBERT_AVAILABLE = False
     print("WARNING: code-bert-score not installed. Run: pip install code-bert-score")
+
+def ensure_nltk_data():
+    """Ensure required NLTK corpora/tokenizers exist for metric computation."""
+    try:
+        nltk.data.find('corpora/wordnet')
+        nltk.data.find('corpora/omw-1.4')
+        nltk.data.find('tokenizers/punkt')
+    except LookupError:
+        print("Downloading required NLTK data...")
+        nltk.download('wordnet', quiet=True)
+        nltk.download('omw-1.4', quiet=True)
+        nltk.download('punkt', quiet=True)
+        print("NLTK data downloaded successfully.")
+
+ensure_nltk_data()
 
 def bleu_score(reference, candidate):
     # regex tokenization: alphanumeric sequences or single punctuation marks

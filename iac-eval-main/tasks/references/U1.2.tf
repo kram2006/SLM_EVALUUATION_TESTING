@@ -8,7 +8,7 @@ terraform {
 }
 
 provider "xenorchestra" {
-  url      = "ws://localhost:8080"
+  url      = "ws://localhost:8080/api/"
   username = "admin@admin.net"
   password = "admin"
   insecure = true
